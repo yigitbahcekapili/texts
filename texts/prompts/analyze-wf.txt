@@ -1,0 +1,15 @@
+"Bu projedeki Windows Workflow Foundation (WF) mimarisini bir developer gözüyle analiz etmeni istiyorum. Lütfen aşağıdaki başlıklar özelinde detaylı bir teknik döküm çıkar:
+
+Mimari Yapı: Projede WF akışları nerede tanımlanmış? .xaml dosyaları ile C# CodeActivity sınıfları arasındaki ilişki nasıl kurulmuş?
+
+Base Sınıflar: Projede özel olarak türetilmiş CodeActivity, AsyncCodeActivity veya NativeActivity sınıfları var mı? Varsa, ortak kullanılan mantık (logging, error handling, DB erişimi vb.) bu base sınıflarda nasıl çözülmüş?
+
+Argüman Yönetimi: InArgument, OutArgument ve InOutArgument yapılarının kullanımına bir örnek ver. Veriler aktiviteler arasında nasıl taşınıyor?
+
+State Machine / Sequence: Proje genelinde Jira benzeri statü yönetimi için hangi akış tipi (State Machine mi, Sequence mi?) tercih edilmiş? Bir Task'ın durum geçişini (Transition) tetikleyen mekanizma kodda nasıl yer alıyor?
+
+Kalıcılık (Persistence): Uzun süren akışlar (bekleyen tasklar) veritabanına nasıl kaydediliyor? SqlWorkflowInstanceStore veya benzeri bir yapı kullanılıyor mu?
+
+Başlatma ve Tetikleme: Bir iş akışı (workflow instance) kodun hangi noktasında, hangi servis (örneğin WorkflowApplication veya WorkflowInvoker) ile başlatılıyor?
+
+Lütfen örnek dosya yolları ve kod parçacıkları göstererek, adım adım bir Task'ın oluşturulmasından 'Done' durumuna gelene kadar geçtiği teknolojik durakları açıkla."
