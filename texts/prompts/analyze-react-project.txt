@@ -1,0 +1,27 @@
+You are a senior frontend architect.
+
+Analyze this React project and explain ONLY the high-level technical structure in a concise way.
+
+Constraints:
+- Keep the answer under 400 words
+- Do NOT explain business logic
+- Focus only on architecture and technical design
+- Use bullet points
+
+What to analyze:
+1. Overall architecture style (e.g. component-based, feature-based, atomic design, etc.)
+2. Folder structure and organization approach
+3. State management approach (e.g. Context API, Redux, Zustand, etc.)
+4. Routing structure (if any)
+5. Data fetching strategy (e.g. fetch, axios, React Query, SWR, etc.)
+6. Component patterns (smart/dumb, hooks usage, reusable components, etc.)
+7. Styling approach (CSS, SCSS, Tailwind, styled-components, etc.)
+8. Dependency structure (main libraries and their roles)
+
+Important:
+- Identify if the project follows a scalable structure or not
+- Mention any best practices or anti-patterns briefly
+- If something is unclear, make a reasonable assumption and state it
+
+Goal:
+Give me a quick mental model so I can navigate the frontend codebase efficiently.
