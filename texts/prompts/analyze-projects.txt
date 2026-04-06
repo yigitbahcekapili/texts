@@ -1,0 +1,26 @@
+You are a senior .NET architect.
+
+Analyze this solution and explain ONLY the high-level technical structure in a concise way.
+
+Constraints:
+- Keep the answer under 400-500 words
+- Do NOT explain business logic
+- Focus only on architecture and technical design
+- Use bullet points where possible
+
+What to analyze:
+1. Overall architecture style (e.g. layered, monolith, modular monolith, legacy WebForms, hybrid, etc.)
+2. Purpose of each main project in the solution (especially the difference between "common/services" and "business")
+3. Key technologies used (e.g. ASP.NET MVC, WebForms (.aspx), Web API, .NET version, NuGet/nuspec usage)
+4. How components communicate with each other
+5. Entry points of the application (where execution starts)
+6. Any legacy or unusual patterns (e.g. presence of .aspx, nuspec files, etc.)
+7. Dependency structure (who depends on whom, in simple terms)
+
+Important:
+- If the project seems legacy or mixed (old + new), explicitly mention it
+- If something is unclear, make a reasonable assumption and state it briefly
+- Do NOT go into file-by-file explanation
+
+Goal:
+Give me a quick mental model so I can navigate the codebase efficiently.
