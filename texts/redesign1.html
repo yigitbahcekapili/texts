@@ -1,97 +1,112 @@
-{/* 22. Satırdaki Ana İçerik Kapsayıcısı (Artık flex-col ile alt alta 2 satır barındırıyor) */}
-<div className='flex flex-col justify-between py-3 pl-[21px] pr-4 grow gap-3'>
-  
-  {/* ================= ROW 1: ÜST SATIR ================= */}
-  <div className='flex justify-between items-center w-full'>
-    
-    {/* Sol Üst: Görev Avatarı (A) ve Task Adı (Yan yana) */}
-    <div className='flex items-center gap-2'>
-      <TaskTypeInitial taskType={task.TaskType} />
-      <Tooltip title={isTextTruncated ? removeAiTag(task.TaskDescription) : ''} placement="top">
-        <div ref={descriptionRef} className='text-wsp-input-field-text text-[15px] font-medium leading-[22px] select-none line-clamp-1 break-all'>
-          {addSearchHighlight(removeAiTag(task.TaskDescription), searchValue)}
-        </div>
-      </Tooltip>
-    </div>
+  return (
+    <div
+      className={`group mx-3 rounded-xl hover:bg-bbva-sky-blue-light transition-colors duration-300 ease-in-out rounded flex ${isEditMode === 'edit' ? 'cursor-move' : ''} ${isHighlighted ? 'bg-bbva-sky-blue-light' : 'bg-white'}`}
+      onClick={handleTaskClick}
+      draggable={isEditMode === 'edit' && !isEditTaskEffort}
+      onDragStart={(e) => handleDragStart(e)}
+      data-task-id={task.TaskId}
+    >
+      {/* Sol taraftaki sabit dikey çizgi (Konumu doğru dediğin kısım) */}
+      <div className='pl-3 py-2'>
+        <TaskTypeIndicator taskType={task.TaskType} />
+      </div>
 
-    {/* Sağ Üst: Çalışan Kullanıcı Avatarı */}
-    <div className='flex items-center shrink-0'>
-      {task.WorkingUsers?.length > 0 && task.WorkingUsers?.[0]?.UserID && (
-        isAiCoderWorkingUser(task.WorkingUsers[0]) || teamMemberIdSet.has(task.WorkingUsers[0].UserID)
-      ) && (
-        isAiCoderWorkingUser(task.WorkingUsers[0]) ? (
-          <AiCoderAvatar size="sm" border className="select-none" />
-        ) : (
-          <img
-            src={urlHelper.getUserPhotoUrl(task.WorkingUsers[0].UserID)}
-            alt=""
-            className='object-cover w-6 h-6 rounded-full border border-bbva-secondary-400 select-none shrink-0'
-          />
-        )
-      )}
-    </div>
-  </div>
-
-  {/* ================= ROW 2: ALT SATIR ================= */}
-  <div className='flex justify-between items-center w-full'>
-    
-    {/* Alt Sol: Kalan Efor Bilgisi (Üstteki "A" avatarı ile tam aynı hizadan başlar) */}
-    <div className='flex items-center gap-2'>
-      <span className='text-wsp-light-neutral-neutral-7 text-[13px] font-normal leading-[18px] select-none'>
-        {getML('APM_TASK_REMAINING_EFFORT') + ': '}
-      </span>
-      {isEditTaskEffort ? (
-        <input
-          ref={inputRef}
-          type="number"
-          min="0"
-          max="999"
-          value={inputEffort}
-          onChange={handleEffortChange}
-          onBlur={handleEffortUpdate}
-          onKeyDown={handleEffortKeyDown}
-          draggable={false}
-          className="focus:outline-none border-none border-0 p-1 w-12 hide-number-spinners text-wsp-input-field-text text-[15px] font-normal leading-[20px] py-px"
-        />
-      ) : (
-        <span 
-          className={`text-wsp-input-field-text text-[15px] font-normal leading-[20px] pl-2 pr-4 py-px ${isEffortEditable ? 'cursor-text bg-wsp-light-neutral-neutral-2' : ''} select-none`} 
-          onClick={handleEffortClick}
-        >
-          {inputEffort}
-        </span>
-      )}
-      {/* AI Logosu */}
-      {isAiGenerated && (
-        <Tooltip title={getML('APM_AI_GENERATED_BADGE_TOOLTIP') || 'AI ile oluşturuldu'}>
-          <img src={AiGeneratedIcon} alt="AI Task" className='w-4 h-4 shrink-0 ml-2' />
-        </Tooltip>
-      )}
-    </div>
-
-    {/* Sağ Alt: Üzerine Al Butonu ve Diğer İkonlar */}
-    <div className='flex items-center gap-2 shrink-0'>
-      {/* Üzerine Al Butonu */}
-      {((isEditMode === 'edit' || isEditMode === 'draftedit') &&
-        userTeamRoles &&
-        !userTeamRoles.every(role => excludedRoleTypesFromTeamUser.includes(role)) &&
-        task.WorkingUsers?.[0]?.UserID !== actionUserInfo?.ID) && (
-          <div className='custom-hidden group-hover:block shrink-0'>
-            <Tooltip title={getML('APM_TOOLTIP_ASSIGN_TO_ME')}>
-              <div className='shrink-0 cursor-pointer select-none' onClick={handleAssignToMe}>
-                <img src={AssignToMeIcon} alt="" className='w-6 h-6' />
+      {/* Yenilenen ve Hizalanan Ana İçerik Alanı (2 Satırlı Flex Yapısı) */}
+      <div className='flex flex-col justify-between py-3 pl-[21px] pr-4 grow gap-3'>
+        
+        {/* ================= ROW 1: ÜST SATIR ================= */}
+        <div className='flex justify-between items-center w-full'>
+          
+          {/* Sol Üst: Görev Avatarı (A) ve Task Adı */}
+          <div className='flex items-center gap-2'>
+            <TaskTypeInitial taskType={task.TaskType} />
+            <Tooltip title={isTextTruncated ? removeAiTag(task.TaskDescription) : ''} placement="top">
+              <div ref={descriptionRef} className='text-wsp-input-field-text text-[15px] font-medium leading-[22px] select-none line-clamp-1 break-all'>
+                {addSearchHighlight(removeAiTag(task.TaskDescription), searchValue)}
               </div>
             </Tooltip>
           </div>
-      )}
-      
-      {/* Branch İkonu */}
-      {task.RelatedBranchInd === false ? (
-        <img src={ShareIcon} alt="" className='w-[16px] h-[16px] select-none' />
-      ) : (
-        <div className='w-[16px] h-[16px]'></div>
-      )}
-    </div>
-  </div>
 
-</div>
+          {/* Sağ Üst: Çalışan Kullanıcı Avatarı */}
+          <div className='flex items-center shrink-0'>
+            {task.WorkingUsers?.length > 0 && task.WorkingUsers?.[0]?.UserID && (
+              isAiCoderWorkingUser(task.WorkingUsers[0]) || teamMemberIdSet.has(task.WorkingUsers[0].UserID)
+            ) && (
+              isAiCoderWorkingUser(task.WorkingUsers[0]) ? (
+                <AiCoderAvatar size="sm" border className="select-none" />
+              ) : (
+                <img
+                  src={urlHelper.getUserPhotoUrl(task.WorkingUsers[0].UserID)}
+                  alt=""
+                  className='object-cover w-6 h-6 rounded-full border border-bbva-secondary-400 select-none shrink-0'
+                />
+              )
+            )}
+          </div>
+        </div>
+
+        {/* ================= ROW 2: ALT SATIR ================= */}
+        <div className='flex justify-between items-center w-full'>
+          
+          {/* Alt Sol: Kalan Efor Bilgisi (Üstteki "A" avatarı ile tam aynı dikey hizada başlar) */}
+          <div className='flex items-center gap-2'>
+            <span className='text-wsp-light-neutral-neutral-7 text-[13px] font-normal leading-[18px] select-none'>
+              {getML('APM_TASK_REMAINING_EFFORT') + ': '}
+            </span>
+            {isEditTaskEffort ? (
+              <input
+                ref={inputRef}
+                type="number"
+                min="0"
+                max="999"
+                value={inputEffort}
+                onChange={handleEffortChange}
+                onBlur={handleEffortUpdate}
+                onKeyDown={handleEffortKeyDown}
+                draggable={false}
+                className="focus:outline-none border-none border-0 p-1 w-12 hide-number-spinners text-wsp-input-field-text text-[15px] font-normal leading-[20px] py-px"
+              />
+            ) : (
+              <span 
+                className={`text-wsp-input-field-text text-[15px] font-normal leading-[20px] pl-2 pr-4 py-px ${isEffortEditable ? 'cursor-text bg-wsp-light-neutral-neutral-2' : ''} select-none`} 
+                onClick={handleEffortClick}
+              >
+                {inputEffort}
+              </span>
+            )}
+            {/* AI Logosu */}
+            {isAiGenerated && (
+              <Tooltip title={getML('APM_AI_GENERATED_BADGE_TOOLTIP') || 'AI ile oluşturuldu'}>
+                <img src={AiGeneratedIcon} alt="AI Task" className='w-4 h-4 shrink-0 ml-2' />
+              </Tooltip>
+            )}
+          </div>
+
+          {/* Sağ Alt: Üzerine Al Butonu ve Diğer İkonlar */}
+          <div className='flex items-center gap-2 shrink-0'>
+            {/* Üzerine Al Butonu */}
+            {((isEditMode === 'edit' || isEditMode === 'draftedit') &&
+              userTeamRoles &&
+              !userTeamRoles.every(role => excludedRoleTypesFromTeamUser.includes(role)) &&
+              task.WorkingUsers?.[0]?.UserID !== actionUserInfo?.ID) && (
+                <div className='custom-hidden group-hover:block shrink-0'>
+                  <Tooltip title={getML('APM_TOOLTIP_ASSIGN_TO_ME')}>
+                    <div className='shrink-0 cursor-pointer select-none' onClick={handleAssignToMe}>
+                      <img src={AssignToMeIcon} alt="" className='w-6 h-6' />
+                    </div>
+                  </Tooltip>
+                </div>
+            )}
+            
+            {/* Branch İkonu */}
+            {task.RelatedBranchInd === false ? (
+              <img src={ShareIcon} alt="" className='w-[16px] h-[16px] select-none' />
+            ) : (
+              <div className='w-[16px] h-[16px]'></div>
+            )}
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
