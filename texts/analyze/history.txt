@@ -1,0 +1,1526 @@
+Görev: EF6 Database-First projede generic entity history/audit mekanizması tasarla ve uygula
+
+1. Proje bağlamı
+
+Mevcut proje:
+
+• .NET Framework 4.8
+• Entity Framework 6.0.0.0
+• Database-First yaklaşımı kullanıyor.
+• .edmx ve .edmx.diagram dosyaları mevcut.
+• Entity’ler büyük ölçüde EDMX tarafından generate ediliyor.
+• Mevcut veritabanında Agile/Jira benzeri bir yapı bulunuyor.
+• Temel entity’ler:
+  • Agile Epic
+  • Agile Feature
+  • Agile PBI
+• Gerçek tablo/entity isimleri implementation sırasında mevcut projeden tespit edilmeli. Bu dokümanda örnek olarak:
+  • AgileEpic
+  • AgileFeature
+  • AgilePbi
+kullanılabilir.
+• History tablosunun gerçek adı henüz kesin değil. Dokümanda [HistoryTable] placeholder olarak kullanılabilir.
+
+İstenen özellik:
+
+Epic, Feature ve PBI entity’lerinin bütün kolonlarını değil, belirli kolonlarının değişikliklerini tarihçe olarak kaydetmek.
+
+History kaydı şu temel bilgileri içermeli:
+
+• History record ID
+• Entity type
+• Entity ID
+• Değişen field/property adı
+• Eski değer
+• Yeni değer
+• Değişiklik tarihi
+• Değişikliği yapan kullanıcı
+
+Önerilen generic model:
+
+```text
+[HistoryTable]
+
+Id
+EntityType
+EntityId
+Field
+OldValue
+NewValue
+ChangedAt
+ChangedBy
+```
+
+EntityType örneğin:
+
+```csharp
+public enum AgileEntityType
+{
+    Epic = 1,
+    Feature = 2,
+    Pbi = 3
+}
+```
+
+olabilir.
+
+Ancak gerçek isimler mevcut projeye göre belirlenmelidir.
+
+────────
+
+2. ÖNEMLİ TASARIM KARARI
+
+Epic, Feature ve PBI için üç ayrı generic history tablosu oluşturulmayacak.
+
+Şu yapı tercih edilmeli:
+
+```text
+[HistoryTable]
+```
+
+tek history tablosu olacak ve:
+
+```text
+EntityType + EntityId
+```
+
+ile hangi entity’nin history’si olduğu belirlenecek.
+
+Örnek:
+
+```text
+EntityType = Pbi
+EntityId   = 123
+Field      = Priority
+OldValue   = 2
+NewValue   = 3
+```
+
+ve:
+
+```text
+EntityType = Feature
+EntityId   = 123
+Field      = Title
+OldValue   = Old Title
+NewValue   = New Title
+```
+
+aynı tabloda bulunabilir.
+
+Burada EntityId polymorphic reference olacaktır. Dolayısıyla generic history tablosunda klasik FK kullanımı mümkün olmayabilir. Bunun bilinçli bir tasarım kararı olduğu kabul edilmelidir.
+
+────────
+
+3. STATUS LOG’LARINI HISTORY İLE BİRLEŞTİRME
+
+Mevcut sistemde:
+
+```text
+[AgileEpicStatusLog]
+[AgileFeatureStatusLog]
+[AgilePbiStatusLog]
+```
+
+benzeri status log tabloları bulunmaktadır.
+
+Bunlar generic [HistoryTable] içine taşınmayacak.
+
+Çünkü bunların amacı generic field audit’ten farklıdır.
+
+Status log’larda örneğin:
+
+```text
+Id
+BusinessStatus
+Date
+CreatedBy
+```
+
+bulunmaktadır.
+
+PBI status log’unda ayrıca:
+
+```text
+Explanation
+```
+
+alanı bulunmaktadır.
+
+Dolayısıyla status log’lar domain’e özgü status lifecycle bilgisidir.
+
+History tablosuna:
+
+```text
+Status: OldStatus -> NewStatus
+```
+
+şeklinde tekrar yazılmamalıdır.
+
+Böylece aynı status değişikliğinin hem status log hem generic history tablosunda duplicate edilmesi engellenmelidir.
+
+Mevcut status log yapısına bu çalışma kapsamında mümkün olduğunca dokunulmayacak.
+
+────────
+
+4. EN ÖNEMLİ IMPLEMENTASYON KARARI
+
+Business kodunun her değiştirdiği property için manuel olarak:
+
+```csharp
+historyRepository.Create(...)
+```
+
+çağırması İSTENMİYOR.
+
+Örneğin şu yaklaşım kullanılmamalı:
+
+```csharp
+pbi.Title = request.Title;
+
+historyRepository.Create(...);
+
+pbi.Priority = request.Priority;
+
+historyRepository.Create(...);
+
+pbi.StoryPoint = request.StoryPoint;
+
+historyRepository.Create(...);
+```
+
+Bu yaklaşım özellikle büyük projede history oluşturmayı developer’ın unutmasına neden olur.
+
+Bunun yerine:
+
+```text
+Business code
+      ↓
+Entity property değişikliği
+      ↓
+EF6 ChangeTracker
+      ↓
+SaveChanges / SaveChangesAsync
+      ↓
+History builder
+      ↓
+[HistoryTable]
+```
+
+mekanizması kurulmalıdır.
+
+────────
+
+5. EF6 KISITI
+
+Bu proje EF Core kullanmıyor.
+
+EF 6.0.0.0 kullanıyor.
+
+Dolayısıyla:
+
+```text
+SaveChangesInterceptor
+```
+
+gibi EF Core API’leri kullanılmamalı.
+
+EF6’nın kendi mekanizmasına uygun çözüm kullanılmalı:
+
+```csharp
+DbContext.SaveChanges()
+DbContext.SaveChangesAsync()
+DbContext.ChangeTracker
+```
+
+Özellikle Database-First EDMX context’inin nasıl generate edildiği dikkate alınmalıdır.
+
+────────
+
+6. DATABASE-FIRST / EDMX UYUMLULUĞU
+
+EDMX tarafından generate edilen dosyalar doğrudan elle değiştirilmemeli.
+
+Örneğin:
+
+```text
+[Something].Designer.cs
+```
+
+gibi generated dosyalara history business logic eklenmemeli.
+
+Çünkü EDMX yeniden generate edildiğinde değişikliklerin kaybolma riski vardır.
+
+Bunun yerine mümkün olduğunca:
+
+```text
+partial class
+```
+
+kullanılmalı.
+
+Örneğin generated context:
+
+```csharp
+public partial class ExistingDbContext : DbContext
+{
+}
+```
+
+ise ayrı bir dosyada:
+
+```text
+ExistingDbContext.History.cs
+```
+
+gibi:
+
+```csharp
+public partial class ExistingDbContext
+{
+    ...
+}
+```
+
+kullanılabilir.
+
+Ancak generated context’in mevcut yapısı mutlaka incelenmeli.
+
+Eğer generated context içerisinde zaten SaveChanges override edilmişse, ikinci bir override oluşturulamayacağı için mevcut implementasyon buna göre genişletilmelidir.
+
+Ama generated .Designer.cs dosyası değiştirilmemelidir.
+
+────────
+
+7. ÖNERİLEN DOSYA YAPISI
+
+Mevcut solution’ın naming convention’ına uyarlanmak üzere aşağıdakine benzer bir yapı oluştur:
+
+```text
+Domain/
+    Agile/
+        History/
+            AgileHistory.cs
+            AgileEntityType.cs
+
+Application/
+    History/
+        IAgileHistoryService.cs
+        AgileHistoryService.cs
+        AgileHistoryFieldPolicy.cs
+
+Infrastructure/
+    Persistence/
+        History/
+            AgileHistoryBuilder.cs
+            AgileHistoryValueConverter.cs
+
+        ExistingDbContext.History.cs
+
+        Repositories/
+            IAgileHistoryRepository.cs
+            AgileHistoryRepository.cs
+```
+
+Ancak mevcut proje zaten katmanlı değilse yeni katmanlar sırf bu yapı için zorla oluşturulmamalıdır.
+
+Öncelik:
+
+> Mevcut projenin architecture convention’ına uyum.
+
+────────
+
+8. HISTORY ENTITY
+
+History tablosu veritabanına eklendikten sonra EDMX’in update edilmesi tercih edilmelidir.
+
+Böylece [HistoryTable] entity’si de Database-First model içerisinde bulunabilir.
+
+Örneğin:
+
+```csharp
+public partial class AgileHistory
+{
+    public long Id { get; set; }
+
+    public int EntityType { get; set; }
+
+    public long EntityId { get; set; }
+
+    public string Field { get; set; }
+
+    public string OldValue { get; set; }
+
+    public string NewValue { get; set; }
+
+    public DateTime ChangedAt { get; set; }
+
+    public long? ChangedBy { get; set; }
+}
+```
+
+Gerçek DB kolon tipleri mevcut schema’ya göre kullanılmalıdır.
+
+Eğer entity generated ise generated class üzerinde manuel business logic yazılmamalıdır.
+
+Gerekirse partial class ile extension yapılabilir.
+
+────────
+
+9. ENTITY TYPE
+
+Generic history’nin entity türünü belirlemek için enum kullanılmalıdır.
+
+Örneğin:
+
+```csharp
+public enum AgileEntityType
+{
+    Epic = 1,
+    Feature = 2,
+    Pbi = 3
+}
+```
+
+Enum değerleri DB’deki EntityType kolonuyla uyumlu olmalıdır.
+
+Entity type resolution için aşağıdaki gibi güvenli bir mapping tercih edilmelidir:
+
+```csharp
+private static AgileEntityType? ResolveEntityType(object entity)
+{
+    switch (entity)
+    {
+        case AgileEpic:
+            return AgileEntityType.Epic;
+
+        case AgileFeature:
+            return AgileEntityType.Feature;
+
+        case AgilePbi:
+            return AgileEntityType.Pbi;
+
+        default:
+            return null;
+    }
+}
+```
+
+Reflection ile:
+
+```csharp
+entity.GetType().Name
+```
+
+üzerinden string manipulation yaparak enum bulmaya çalışma.
+
+Örneğin:
+
+```text
+AgilePbi -> Pbi
+```
+
+gibi string convention’a güvenilmemeli.
+
+Yeni entity eklendiğinde mapping’in explicit olarak güncellenebilmesi tercih edilmeli.
+
+────────
+
+10. HANGİ FIELD’LAR HISTORY’YE GİRECEK?
+
+Bütün property’ler audit edilmeyecek.
+
+Örneğin:
+
+```text
+Title             -> YES
+Description       -> YES
+Priority          -> YES
+StoryPoint        -> YES
+Assignee           -> YES
+
+Id                -> NO
+CreatedAt         -> NO
+CreatedBy         -> NO
+UpdatedAt         -> NO
+UpdatedBy         -> NO
+RowVersion        -> NO
+Navigation props  -> NO
+```
+
+Gerçek field listesi mevcut requirement’a göre oluşturulmalıdır.
+
+Bu bilgi ChangeTracker’a hard-coded şekilde dağılmamalı.
+
+Central bir policy/mapping oluşturulmalı.
+
+Örneğin:
+
+```csharp
+public class AgileHistoryFieldPolicy
+{
+    public bool ShouldTrack(
+        AgileEntityType entityType,
+        string propertyName)
+    {
+        ...
+    }
+}
+```
+
+veya mevcut proje için daha uygun başka bir yapı kullanılabilir.
+
+Önemli olan:
+
+> Audit edilecek alanların merkezi ve açık bir whitelist olması.
+
+Blacklist yaklaşımı:
+
+```text
+Her şeyi history'ye al
+sonra CreatedAt, UpdatedAt vb. çıkar
+```
+
+yerine whitelist tercih edilmeli.
+
+Bu daha güvenlidir.
+
+Yeni bir entity property eklendiğinde yanlışlıkla audit kapsamına girmemelidir.
+
+────────
+
+11. CHANGE TRACKER AKIŞI
+
+SaveChanges çalışmadan önce:
+
+```csharp
+ChangeTracker.Entries()
+```
+
+üzerinden değişiklikler incelenmelidir.
+
+Öncelikli olarak:
+
+```text
+EntityState.Modified
+```
+
+kontrol edilmelidir.
+
+Gerekiyorsa:
+
+```text
+Added
+Deleted
+```
+
+davranışı ayrıca değerlendirilmelidir.
+
+İlk implementasyonda requirement sadece mevcut entity’lerin değişen alanlarının history’sini istiyorsa:
+
+```text
+Modified
+```
+
+ile başlanabilir.
+
+Ama mimari gelecekte Added/Deleted audit desteği eklenebilecek şekilde tasarlanmalıdır.
+
+────────
+
+12. PROPERTY DEĞİŞİKLİĞİNİ BULMA
+
+EF6 ChangeTracker üzerinden:
+
+```csharp
+var entry = ...
+```
+
+ve:
+
+```csharp
+entry.State
+entry.CurrentValues
+entry.OriginalValues
+```
+
+kullanılmalıdır.
+
+Property bazında:
+
+```csharp
+entry.Property(propertyName)
+```
+
+veya EF6’nın uygun PropertyEntry API’si kullanılmalıdır.
+
+Amaç:
+
+```text
+OriginalValue
+CurrentValue
+```
+
+karşılaştırması yapmaktır.
+
+Sadece gerçekten değişmiş property’ler history’ye eklenmelidir.
+
+Örneğin entity’de 10 property varsa ama sadece:
+
+```text
+Title
+Priority
+```
+
+değişmişse:
+
+```text
+2 history record
+```
+
+oluşmalı.
+
+10 record oluşmamalı.
+
+────────
+
+13. OLD VALUE / NEW VALUE
+
+Değerler DB’ye yazılmadan önce güvenli ve deterministik şekilde string’e çevrilmeli.
+
+Basit:
+
+```csharp
+value?.ToString()
+```
+
+yaklaşımının bütün tiplerde güvenli olup olmadığı değerlendirilmelidir.
+
+Özellikle:
+
+```text
+DateTime
+DateTime?
+Decimal
+Enum
+Boolean
+Guid
+Nullable<T>
+```
+
+gibi tipler düşünülmelidir.
+
+Culture-dependent dönüşümlerden kaçınılmalı.
+
+Örneğin decimal için:
+
+```text
+10.5
+```
+
+veya projenin belirlediği invariant format kullanılmalı.
+
+DateTime için ISO/invariant format tercih edilmeli.
+
+Enum değerlerinde sistemin istediği temsil belirlenmeli:
+
+```text
+1
+```
+
+mi yoksa:
+
+```text
+InProgress
+```
+
+mi?
+
+Bu karar açıkça verilmelidir.
+
+History’nin UI’da gösterileceği düşünüldüğünde mümkünse okunabilir değerlerin saklanması değerlendirilebilir; ancak DB’deki mevcut domain davranışı bozulmamalıdır.
+
+────────
+
+14. NULL DAVRANIŞI
+
+Şunlar doğru şekilde ayrılmalı:
+
+```text
+NULL -> "abc"
+"abc" -> NULL
+NULL -> NULL
+```
+
+NULL -> NULL değişiklik değildir ve history oluşturulmamalıdır.
+
+Örneğin:
+
+```text
+Description:
+NULL -> "Test"
+```
+
+history oluşturulmalı.
+
+```text
+Description:
+"Test" -> NULL
+```
+
+history oluşturulmalı.
+
+```text
+Description:
+NULL -> NULL
+```
+
+history oluşturulmamalı.
+
+────────
+
+15. CURRENT USER
+
+History’nin:
+
+```text
+ChangedBy
+```
+
+alanı için doğrudan:
+
+```csharp
+HttpContext.Current
+```
+
+kullanmak yerine bir abstraction oluşturulması tercih edilmeli.
+
+Örneğin:
+
+```csharp
+public interface ICurrentUserService
+{
+    long? UserId { get; }
+}
+```
+
+veya mevcut projede zaten kullanıcı/context service varsa o kullanılmalı.
+
+Akış:
+
+```text
+HTTP Request
+    ↓
+Current User
+    ↓
+SaveChanges
+    ↓
+History Builder
+    ↓
+ChangedBy
+```
+
+Background job gibi user context bulunmayan senaryolar ayrıca düşünülmeli.
+
+Örneğin:
+
+```text
+ChangedBy = NULL
+```
+
+veya sistem kullanıcısı.
+
+Bu karar mevcut DB constraint’lerine göre verilmelidir.
+
+────────
+
+16. SAVECHANGES OVERRIDE
+
+Ana mekanizma DbContext.SaveChanges() içerisinde çalışmalı.
+
+Örnek conceptual akış:
+
+```csharp
+public override int SaveChanges()
+{
+    var histories = historyBuilder.Build(ChangeTracker);
+
+    AddHistories(histories);
+
+    return base.SaveChanges();
+}
+```
+
+Ancak gerçek implementasyonda recursive SaveChanges oluşturulmamasına dikkat edilmeli.
+
+Özellikle:
+
+```text
+HistoryRepository.Add()
+    ↓
+SaveChanges()
+    ↓
+HistoryBuilder
+    ↓
+HistoryRepository.Add()
+    ↓
+...
+```
+
+şeklinde recursion kesinlikle olmamalı.
+
+History kayıtları aynı DbContext’in:
+
+```csharp
+DbSet<AgileHistory>.Add(...)
+DbSet<AgileHistory>.AddRange(...)
+```
+
+mekanizmasıyla context’e eklenmeli ve en sonunda tek base.SaveChanges() çağrılmalıdır.
+
+────────
+
+17. ASYNC SAVECHANGES
+
+Projede SaveChangesAsync() kullanılıyorsa aynı history mekanizması async path’te de çalışmalıdır.
+
+Örneğin:
+
+```csharp
+public override async Task<int> SaveChangesAsync(
+    CancellationToken cancellationToken)
+{
+    var histories = historyBuilder.Build(ChangeTracker);
+
+    AddHistories(histories);
+
+    return await base.SaveChangesAsync(cancellationToken);
+}
+```
+
+EF6 sürümünün mevcut async API desteği ve projenin kullandığı signature mutlaka kontrol edilmelidir.
+
+SaveChanges() ve SaveChangesAsync() farklı davranmamalıdır.
+
+────────
+
+18. REPOSITORY TASARIMI
+
+History repository normal CRUD repository gibi tasarlanmamalıdır.
+
+History:
+
+```text
+Append-only
+```
+
+olmalıdır.
+
+Normal uygulama akışında:
+
+```text
+INSERT -> YES
+SELECT -> YES
+UPDATE -> NO
+DELETE -> NO
+```
+
+Bu nedenle:
+
+```csharp
+CreateAsync(...)
+GetByEntityAsync(...)
+```
+
+gibi operasyonlar yeterli olabilir.
+
+Örneğin:
+
+```csharp
+public interface IAgileHistoryRepository
+{
+    Task<IReadOnlyList<AgileHistory>> GetByEntityAsync(
+        AgileEntityType entityType,
+        long entityId);
+
+    Task<IReadOnlyList<AgileHistory>> GetByEntityAsync(
+        AgileEntityType entityType,
+        long entityId,
+        DateTime? from,
+        DateTime? to);
+}
+```
+
+History insertion’ın normal business code tarafından manuel çağrılması gerekmemelidir.
+
+History insertion’ın gerçek sahibi:
+
+```text
+SaveChanges history pipeline
+```
+
+olmalıdır.
+
+Repository daha çok history okuma/query abstraction’ı olarak kullanılabilir.
+
+────────
+
+19. TRANSACTION
+
+Entity değişikliği ve history kaydı aynı transaction içerisinde gerçekleşmelidir.
+
+İstenen davranış:
+
+```text
+BEGIN TRANSACTION
+
+UPDATE PBI
+INSERT History 1
+INSERT History 2
+INSERT History 3
+
+COMMIT
+```
+
+Eğer history insert başarısız olursa entity update de commit edilmemelidir.
+
+Aynı DbContext üzerinde aynı SaveChanges çağrısında yapılması bu konuda tercih edilmelidir.
+
+────────
+
+20. CONCURRENCY
+
+Mevcut projede optimistic concurrency / RowVersion kullanılıyorsa bunun history mekanizmasıyla ilişkisi değerlendirilmelidir.
+
+History:
+
+```text
+OriginalValue
+CurrentValue
+```
+
+üzerinden oluşturulsa bile SaveChanges sırasında concurrency exception oluşursa history kayıtlarının da transaction ile rollback olması gerekir.
+
+Sonuç:
+
+> Başarısız entity update için kalıcı history oluşmamalı.
+
+Bu senaryo özellikle test edilmelidir.
+
+────────
+
+21. BULK UPDATE
+
+Aşağıdaki EF6 tarzı işlemler varsa ayrıca incelenmeli:
+
+```text
+SqlQuery
+ExecuteSqlCommand
+Database.ExecuteSqlCommand
+Stored Procedure
+raw SQL UPDATE
+```
+
+Bunlar ChangeTracker üzerinden geçmeyebilir.
+
+Dolayısıyla:
+
+```text
+Application üzerinden normal entity update
+```
+
+ile:
+
+```text
+Direct SQL update
+```
+
+aynı audit davranışına sahip olmayabilir.
+
+Projede böyle kullanım varsa tespit edilmeli.
+
+Eğer history’nin “uygulamadaki her DB değişikliğini kesinlikle yakalaması” şartı varsa ChangeTracker tek başına yeterli değildir.
+
+Bu durumda database trigger / CDC / başka DB-level audit mekanizmaları ayrıca değerlendirilmelidir.
+
+Ancak requirement yalnızca uygulama üzerinden yapılan entity değişikliklerini audit etmekse ChangeTracker yaklaşımı kullanılabilir.
+
+────────
+
+22. PROPERTY NAVIGATION’LARI
+
+Navigation property’ler history’ye dahil edilmemeli.
+
+Örneğin:
+
+```text
+Pbi.Assignee
+Pbi.Feature
+Pbi.Project
+```
+
+gibi navigation’lar:
+
+```text
+Field = "Assignee"
+OldValue = ...
+NewValue = ...
+```
+
+şeklinde otomatik audit edilmemeli.
+
+Bunun yerine FK property değişiyorsa:
+
+```text
+AssigneeId
+```
+
+gibi scalar property üzerinden audit yapılması tercih edilmeli.
+
+Gerçek projedeki entity mapping’e göre karar verilmelidir.
+
+────────
+
+23. ENTITY ID’NİN OKUNMASI
+
+Generic history builder’ın her entity’nin ID property’sini bilmesi gerekir.
+
+Reflection ile "Id" aramak yerine mümkünse mevcut entity convention kullanılmalı.
+
+Eğer:
+
+```text
+AgileEpic.Id
+AgileFeature.Id
+AgilePbi.Id
+```
+
+hepsinde aynı property adı kullanılıyorsa bu convention kullanılabilir.
+
+Ama bazı entity’lerde:
+
+```text
+EpicId
+FeatureId
+PbiId
+```
+
+gibi farklı isimler varsa merkezi mapping oluşturulmalıdır.
+
+Örneğin:
+
+```csharp
+GetEntityId(entityType, entry)
+```
+
+gibi bir abstraction olabilir.
+
+Bu konu implementation sırasında mevcut EDMX entity’leri incelenerek kesinleştirilmeli.
+
+────────
+
+24. HISTORY FIELD POLICY
+
+Audit edilecek alanları mümkünse şu şekilde merkezi yönet:
+
+```text
+AgileEntityType
+       ↓
+Tracked fields
+```
+
+Örnek:
+
+```text
+Epic
+    Title
+    Description
+    Priority
+
+Feature
+    Title
+    Description
+    Priority
+
+Pbi
+    Title
+    Description
+    Priority
+    StoryPoint
+    AssigneeId
+```
+
+Bunun sonucu olarak ChangeTracker’ın her property’si otomatik olarak audit edilmemeli.
+
+────────
+
+25. TEST SENARYOLARI
+
+Implementasyon tamamlandıktan sonra mutlaka aşağıdaki testler oluşturulmalı.
+
+Test 1 - Tek alan değişikliği
+
+```text
+PBI.Title:
+Old -> New
+```
+
+Beklenen:
+
+```text
+1 history record
+```
+
+Test 2 - Birden fazla alan
+
+```text
+Title
+Priority
+StoryPoint
+```
+
+üçü değiştiyse:
+
+```text
+3 history records
+```
+
+oluşmalı.
+
+Test 3 - Değişmeyen property
+
+Property request içerisinde gönderilmiş olsa bile gerçek değer değişmediyse history oluşmamalı.
+
+Test 4 - NULL -> value
+
+History oluşmalı.
+
+Test 5 - value -> NULL
+
+History oluşmalı.
+
+Test 6 - NULL -> NULL
+
+History oluşmamalı.
+
+Test 7 - CreatedAt
+
+CreatedAt değişse bile whitelist’te değilse history oluşmamalı.
+
+Test 8 - UpdatedAt
+
+UpdatedAt otomatik değişiyorsa history oluşmamalı.
+
+Test 9 - Status
+
+Status değişikliği generic history’ye yazılmamalı.
+
+Mevcut status log mekanizması çalışmaya devam etmeli.
+
+Test 10 - PBI Explanation
+
+PBI status log explanation davranışı generic history’den bağımsız kalmalı.
+
+Test 11 - Transaction rollback
+
+Entity update başarısız olursa history kalmamalı.
+
+Test 12 - Concurrency exception
+
+Concurrency nedeniyle SaveChanges başarısız olursa history kalmamalı.
+
+Test 13 - Async
+
+SaveChangesAsync() ile normal SaveChanges() aynı history davranışını üretmeli.
+
+Test 14 - Background job
+
+Current user bulunmadığında ChangedBy davranışı belirlenen policy’ye uygun olmalı.
+
+Test 15 - Yeni entity property
+
+Yeni bir property eklendiğinde whitelist’e eklenmedikçe otomatik history’ye girmemeli.
+
+Test 16 - Bulk/raw SQL
+
+ChangeTracker’ın göremediği SQL değişikliklerinin davranışı açıkça belgelenmeli.
+
+────────
+
+26. INDEX TASARIMI
+
+History tablosu zamanla büyüyeceği için index tasarımı baştan düşünülmeli.
+
+En önemli sorgu:
+
+```text
+Bir Epic/Feature/PBI'ın history'sini getir.
+```
+
+Bu nedenle:
+
+```text
+(EntityType, EntityId, ChangedAt)
+```
+
+üzerinde composite index düşünülmeli.
+
+Örneğin:
+
+```text
+IX_[HistoryTable]_EntityType_EntityId_ChangedAt
+```
+
+gerçek DB naming convention’a göre oluşturulabilir.
+
+Ayrıca:
+
+```text
+ChangedBy
+ChangedAt
+```
+
+üzerinden raporlama yapılacaksa ihtiyaç bazında ikinci index değerlendirilebilir.
+
+Gereksiz index eklenmemeli.
+
+────────
+
+27. PERFORMANS
+
+Mevcut sistemde yaklaşık:
+
+```text
+120.000 Epic
+130.000 Feature
+3.700.000 PBI
+```
+
+bulunduğu bilinmektedir.
+
+Bu sayı generic history tablosunu entity tipine göre üç ayrı tabloya bölmek için tek başına yeterli gerekçe değildir.
+
+History tablosunun büyümesi beklenmektedir.
+
+Bu nedenle öncelikle:
+
+```text
+Composite indexes
+Efficient ChangeTracker filtering
+Only whitelisted properties
+Only actually modified properties
+No unnecessary history rows
+```
+
+sağlanmalıdır.
+
+İleride history row sayısı gerçekten çok büyürse:
+
+```text
+Partitioning
+Archiving
+Retention
+Table partition strategy
+```
+
+ayrıca değerlendirilebilir.
+
+İlk aşamada sırf gelecekte büyüyebilir düşüncesiyle üç ayrı generic history tablosu oluşturulmamalıdır.
+
+────────
+
+28. ÖNERİLEN FINAL AKIŞ
+
+Final mimari şu davranışı sağlamalı:
+
+```text
+User
+  ↓
+API / Application
+  ↓
+PBI Update Handler
+  ↓
+PBI entity property değişiklikleri
+  ↓
+DbContext.ChangeTracker
+  ↓
+SaveChanges()
+  ↓
+History Builder
+  ↓
+Tracked entity?
+  ↓
+Supported EntityType?
+  ↓
+Modified?
+  ↓
+Tracked property?
+  ↓
+Actually changed?
+  ↓
+OldValue / NewValue
+  ↓
+AgileHistory entity
+  ↓
+DbContext.AgileHistories.Add(...)
+  ↓
+base.SaveChanges()
+  ↓
+Transaction
+  ↓
+Entity + History persist
+```
+
+Business handler içerisinde:
+
+```csharp
+historyRepository.Create(...)
+```
+
+olmamalı.
+
+Business handler yalnızca entity’yi değiştirmeli.
+
+────────
+
+29. ÖNERİLEN SINIF SORUMLULUKLARI
+
+AgileHistory
+
+History DB entity’si.
+
+Sadece history kaydını temsil eder.
+
+AgileEntityType
+
+Entity türünü temsil eden enum.
+
+AgileHistoryFieldPolicy
+
+Hangi entity’nin hangi property’lerinin audit edileceğine karar verir.
+
+AgileHistoryValueConverter
+
+Old/New değerlerin güvenli ve deterministik şekilde string representation’a dönüştürülmesini sağlar.
+
+AgileHistoryBuilder
+
+EF6 ChangeTracker’dan:
+
+```text
+Entity
+Property
+OriginalValue
+CurrentValue
+```
+
+bilgilerini alarak AgileHistory nesneleri üretir.
+
+ExistingDbContext.History.cs
+
+Generated EDMX context’i değiştirmeden SaveChanges pipeline’ına history mekanizmasını entegre eder.
+
+IAgileHistoryRepository
+
+History sorgularının abstraction’ı.
+
+AgileHistoryRepository
+
+History kayıtlarını okuma/query işlemleri.
+
+History insertion için business layer tarafından kullanılmamalıdır.
+
+ICurrentUserService
+
+Mevcut kullanıcı ID’sini sağlar.
+
+────────
+
+30. ÖNEMLİ: GENERATED CODE’U BOZMA
+
+EDMX Database-First olduğundan:
+
+```text
+*.Designer.cs
+```
+
+dosyalarına manuel business logic ekleme.
+
+Model update/re-generate edildiğinde değişikliklerin kaybolmaması gerekiyor.
+
+Mümkün olan yerlerde:
+
+```text
+partial class
+```
+
+kullan.
+
+Eğer mevcut generated context’in yapısı önerilen partial SaveChanges override yaklaşımına uygun değilse, mevcut context generation yapısını incele ve en az müdahaleyle güvenli bir extension noktası bul.
+
+────────
+
+31. IMPLEMENTASYONDAN ÖNCE YAPILMASI GEREKENLER
+
+Kod yazmadan önce mevcut projede şu noktaları tespit et:
+
+1. EDMX’in gerçek adı.
+2. Generated DbContext’in gerçek adı.
+3. DbContext’in partial olup olmadığı.
+4. Mevcut SaveChanges() override edilip edilmediği.
+5. SaveChangesAsync() kullanılıp kullanılmadığı.
+6. Entity’lerin gerçek CLR class isimleri.
+7. Epic ID property’sinin adı.
+8. Feature ID property’sinin adı.
+9. PBI ID property’sinin adı.
+10. Current user bilgisinin projede nasıl elde edildiği.
+11. Transaction yönetiminin nasıl yapıldığı.
+12. Repository/UnitOfWork pattern’i olup olmadığı.
+13. PBI/Feature/Epic update işlemlerinin nerelerde yapıldığı.
+14. Raw SQL / stored procedure ile update yapılıp yapılmadığı.
+15. Existing status log mekanizmasının nasıl çalıştığı.
+16. Status değişikliklerinin SaveChanges dışında veya içinde yapılıp yapılmadığı.
+17. Entity’lerde UpdatedAt, UpdatedBy, RowVersion gibi otomatik alanların nasıl yönetildiği.
+
+Bu bilgiler alınmadan mevcut dosya isimleri varsayılmamalı.
+
+────────
+
+32. IMPLEMENTASYONDA BEKLENEN ÇIKTI
+
+Implementasyon önerisi aşağıdaki konuları somut olarak göstermeli:
+
+1. Veritabanı history tablosunun önerilen schema’sı.
+2. EDMX’e history tablosunun nasıl ekleneceği.
+3. Generated entity ile custom partial class ayrımı.
+4. AgileEntityType enum’unun konumu.
+5. AgileHistoryFieldPolicy implementasyonu.
+6. AgileHistoryBuilder implementasyonu.
+7. EF6 DbContext.SaveChanges() entegrasyonu.
+8. EF6 SaveChangesAsync() entegrasyonu.
+9. ChangeTracker üzerinden Original/Current Value okuma.
+10. EntityType resolution.
+11. EntityId resolution.
+12. CurrentUser resolution.
+13. NULL ve datatype serialization.
+14. Transaction davranışı.
+15. Repository/query yapısı.
+16. Dependency injection mevcut projede varsa entegrasyonu.
+17. Unit test / integration test örnekleri.
+18. Status logların bu mekanizmanın dışında nasıl bırakılacağı.
+19. Raw SQL / bulk update sınırlamaları.
+20. EDMX regenerate edildiğinde kodun bozulmamasının nasıl sağlanacağı.
+
+────────
+
+33. ÖNEMLİ TASARIM İLKESİ
+
+Çözüm “çalışıyor” seviyesinde bırakılmamalı.
+
+Şu anti-pattern özellikle kullanılmamalı:
+
+```text
+Her handler:
+    entity değiştir
+    history oluştur
+    history oluştur
+    history oluştur
+```
+
+Bunun yerine:
+
+```text
+Her handler:
+    entity değiştir
+    SaveChanges
+```
+
+ve audit mekanizması otomatik olarak:
+
+```text
+ChangeTracker
+    ↓
+HistoryBuilder
+    ↓
+History records
+```
+
+oluşturmalı.
+
+Böylece history mekanizması business koduna dağılmaz.
+
+────────
+
+34. SON MİMARİ HEDEF
+
+Hedeflenen mimari:
+
+```text
+                    APPLICATION
+                         │
+                         ▼
+                Entity Update Logic
+                         │
+                         ▼
+                    DbContext
+                         │
+                  ChangeTracker
+                         │
+                         ▼
+              ┌────────────────────┐
+              │ History Builder    │
+              └─────────┬──────────┘
+                        │
+              ┌─────────┴─────────┐
+              │                   │
+              ▼                   ▼
+        Field Policy        Current User
+              │                   │
+              └─────────┬─────────┘
+                        ▼
+                 AgileHistory
+                        │
+                        ▼
+                 [HistoryTable]
+```
+
+Status tarafı ise bundan bağımsız kalmalı:
+
+```text
+AgileEpic
+    ↓
+AgileEpicStatusLog
+
+AgileFeature
+    ↓
+AgileFeatureStatusLog
+
+AgilePbi
+    ↓
+AgilePbiStatusLog
+        + Explanation
+```
+
+Generic history:
+
+```text
+[HistoryTable]
+```
+
+ile status loglar birbirine karıştırılmamalıdır.
+
+────────
+
+Final beklenti
+
+Önerilen çözüm EF Core değil, EF6 + .NET Framework 4.8 + Database-First EDMX gerçeklerine göre hazırlanmalı.
+
+Modern EF Core API’leri veya EF Core interceptor örnekleri doğrudan kopyalanmamalı.
+
+Kod örnekleri mevcut EF6 API’leriyle uyumlu olmalı.
+
+Mevcut proje yapısı bilinmeyen yerlerde isimler placeholder bırakılmalı ve hangi isimlerin mevcut projeden alınması gerektiği açıkça belirtilmeli.
+
+Amaç:
+
+> Epic, Feature ve PBI’daki seçili property değişikliklerini, business koduna manuel history çağrıları eklemeden, EF6 ChangeTracker üzerinden otomatik olarak tek bir generic history tablosuna yazan; transaction-safe, test edilebilir, EDMX regeneration’dan etkilenmeyen ve ileride yeni Agile entity’lerinin eklenmesine izin veren bir yapı oluşturmaktır.
