@@ -1,0 +1,258 @@
+I want you to implement a reusable multi-step guided onboarding tour
+in my existing React application.
+
+I have attached a reference screenshot. Use this screenshot as the
+visual and interaction reference.
+
+IMPORTANT:
+Before writing any code, inspect the existing project architecture,
+component structure, styling approach, installed dependencies,
+UI/component libraries and relevant existing components.
+
+Do not introduce a new architecture unnecessarily.
+Adapt the solution to the existing project conventions.
+
+The implementation must be reusable because I will use this guided
+tour for multiple different elements and multiple pages in the future.
+
+Do NOT implement this as a one-off component specifically for the
+Epic shown in the screenshot.
+
+Instead, create a generic/reusable onboarding tour abstraction and
+then integrate it with the Epic shown in the screenshot as the first
+use case.
+
+I want to implement a multi-step guided onboarding tour in my existing React application.
+
+I have attached a reference screenshot. Use the screenshot as the visual reference and reproduce the interaction and positioning as closely as possible.
+
+IMPORTANT:
+This should NOT be a standard centered modal.
+It should be an anchored guided-tour / onboarding popover that points to a specific element in the UI.
+
+### Initial behavior
+
+There is already an existing button at the top of the page which is currently not visible in the screenshot.
+
+When the user clicks this button, the onboarding tour should start.
+
+The first tour step must target the FIRST Epic item under the FIRST request in the table/list.
+
+The target Epic is the row that contains:
+
+"78912 - Enhance User Profile Management"
+
+The screenshot shows exactly how the first step should look.
+
+### Overlay behavior
+
+When the tour starts:
+
+- Add a full-screen overlay above the application.
+- The overlay should make the entire background appear gray/dimmed.
+- Everything behind the overlay must be non-interactive and cannot be clicked.
+- Scrolling should also be disabled while the tour is active.
+- The targeted Epic element must remain visually highlighted/visible above the overlay.
+- The tour popover must also appear above the overlay.
+
+The target element should visually stand out from the rest of the page.
+
+Do not create a centered modal.
+
+### Popover positioning
+
+The first popover must be positioned relative to the targeted Epic element.
+
+It should appear approximately underneath the target element, matching the attached screenshot.
+
+The popover must have a small triangular arrow/caret on its top-left area pointing directly toward the target Epic.
+
+This triangle/caret is important and should visually connect the popover to the targeted Epic.
+
+The popover should automatically reposition itself if necessary so that it does not go outside the viewport.
+
+Use the target element's DOM position rather than hard-coded screen coordinates.
+
+### Popover design
+
+Match the reference screenshot as closely as possible:
+
+- White background
+- Rounded corners
+- Subtle shadow
+- Approximately 400-450px wide on desktop
+- Responsive on smaller screens
+- Information icon at the top/center
+- Title
+- Description text
+- Footer/navigation area
+- Primary blue button
+- Close "X" button in the top-right corner
+- Small progress indicator/dots near the bottom-left
+- Arrow/caret pointing to the target element
+
+Example first step content:
+
+Title:
+"Planlama alanını keşfedin"
+
+Description:
+"Maddelerinize hedef tarih ve efor ekleyebilir, epic oluşturabilir veya mevcut bir epic'i klonlayabilirsiniz."
+
+Button:
+"İleri"
+
+### Multi-step support
+
+This must NOT be implemented as a single hard-coded popup.
+
+I need a reusable multi-step tour system.
+
+The tour should support an arbitrary number of steps.
+
+For example:
+
+Step 1:
+Target: first Epic
+Title: "Planlama alanını keşfedin"
+Description: "..."
+Button: "İleri"
+
+Step 2:
+Target: another element
+Title: "..."
+Description: "..."
+Button: "İleri"
+
+Step 3:
+Target: another element
+Title: "..."
+Description: "..."
+Button: "Tamamla"
+
+When the user clicks "İleri":
+
+1. Close/hide the current popover
+2. Move the spotlight/highlight to the next target
+3. Recalculate the target's position
+4. Reposition the popover relative to the new target
+5. Update the progress indicator
+
+On the final step, the button should say "Tamamla" or "Anladım".
+
+Clicking the final button should close the tour completely and restore the application to its normal state.
+
+### Close behavior
+
+The user should be able to close the tour at any time using the X button.
+
+When closed:
+
+- Remove the overlay
+- Remove the target highlight
+- Enable scrolling again
+- Restore all interactions
+- Remove any event listeners used by the tour
+
+### Important implementation requirements
+
+Please inspect the existing React project before implementing this.
+
+Do NOT unnecessarily rewrite existing components.
+
+Reuse the existing styling system, CSS conventions, component library and icons if the project already has them.
+
+The tour should be implemented as a reusable component/system, not as code specific only to the first Epic.
+
+Prefer a structure conceptually similar to:
+
+<OnboardingTour
+    isOpen={isTourOpen}
+    steps={[
+        {
+            target: '#first-epic',
+            title: 'Planlama alanını keşfedin',
+            description: '...',
+            placement: 'bottom-start'
+        },
+        {
+            target: '#another-element',
+            title: '...',
+            description: '...',
+            placement: 'right'
+        }
+    ]}
+    onClose={...}
+/>
+
+However, adapt this API to the architecture of the existing project.
+
+### Target element handling
+
+Do not rely on hard-coded coordinates.
+
+The target must be located using a stable DOM selector, ref, data attribute, or another robust mechanism.
+
+For example:
+
+data-tour="first-epic"
+
+or a React ref.
+
+The positioning system should use getBoundingClientRect() or an appropriate positioning library.
+
+If the target is inside a scrollable container, the tour should correctly handle scrolling and repositioning.
+
+### Overlay / spotlight
+
+The target should remain visible above the dark/gray overlay.
+
+The preferred behavior is:
+
+Application
+↓
+Dark/gray overlay
+↓
+Target spotlight/highlight above overlay
+↓
+Popover above everything
+
+The rest of the application must remain visually dimmed.
+
+The highlighted target should NOT become clickable unless explicitly required by a tour step.
+
+### Accessibility
+
+Implement basic accessibility:
+
+- Dialog/popover semantics where appropriate
+- Close button with aria-label
+- Keyboard Escape should close the tour
+- Keyboard navigation should work
+- Focus should remain within the tour while it is open where practical
+- Do not trap focus incorrectly when the tour closes
+
+### Important visual detail
+
+The reference screenshot is the source of truth for the visual appearance.
+
+Pay particular attention to:
+
+1. Popover is anchored to the Epic, NOT centered on screen.
+2. Triangle/caret is positioned at the top-left portion of the popover and points to the Epic.
+3. Background is dimmed/gray and cannot be interacted with.
+4. Epic remains highlighted above the overlay.
+5. Popover has rounded corners and shadow.
+6. X button is in the top-right.
+7. Information icon is centered near the top.
+8. Progress dots are near the bottom-left.
+9. "İleri" button is near the bottom-right.
+10. Multiple steps must be supported.
+11. Final step changes the button to "Tamamla" / "Anladım".
+12. The implementation must work with dynamically rendered React elements.
+
+Before coding, inspect the existing project structure and determine the best place for the reusable tour component, styles, state management and target attributes.
+
+Then implement it directly in the existing architecture.
+
+Do not create a completely separate demo page.
